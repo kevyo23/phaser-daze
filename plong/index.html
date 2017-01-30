@@ -1,0 +1,267 @@
+<html>
+    <head>
+        <title> Plong, a simple twist of the classic 'Pong' game! </title>
+        <script type = "text/javascript" src = "phaser.min.js"></script>
+        <style type = "text/css">
+        body {
+            margin: 0;
+        }
+        </style>
+    </head>
+
+    <body>
+        <script type = "text/javascript">
+            // Plong, a simple twist of the classic 'Pong' game!
+            // Written by: Kevin Yu
+            // Last modified: 30 Jan 2017
+            // Based off: Pong tutorial by Phaser
+
+            // game object
+            var game = new Phaser.Game(1000, 800, Phaser.AUTO, '', {
+                preload: preload,
+                create: create,
+                update: update
+            });
+
+            // sprites
+            var paddleTall, paddleFlat, ball;
+
+            // inputs
+            var inputSpace, inputEnter;
+
+            // ball status
+            var ballLaunched, ballVelocity;
+
+            // player status
+            var playerLives, multiplier;
+
+            // text
+            var scoreText, startText, pauseText;
+            var customCSS = { font: "30px Arial", fill: "#ffffff", align: "center" };
+
+            // audio
+            var squit, meow1, numkey, ping, background;
+
+            function preload() {
+                // load images
+                game.load.image('paddleTall', 'assets/images/paddle.png');
+                game.load.image('paddleFlat', 'assets/images/paddleFlat.png');
+                game.load.image('ball', 'assets/images/ball.png');
+
+                // load audio
+                game.load.audio('squit', 'assets/audio/squit.wav');
+                game.load.audio('meow1', 'assets/audio/meow1.mp3');
+                game.load.audio('numkey', 'assets/audio/numkey.wav');
+                game.load.audio('ping', 'assets/audio/ping.mp3');
+                game.load.audio('background', 'assets/audio/puzzleBg.mp3');
+            }
+
+            function create() {
+                game.stage.backgroundColor = "#4488AA";
+
+                // create sprites
+                paddleTall = createPaddle(0,game.world.centerY, 'paddleTall');
+                paddleFlat = createPaddle(game.world.centerX, game.world.height - 16, 'paddleFlat');
+                ball = createBall(game.world.centerX, game.world.centerY);
+
+                // generate text
+                scoreText = game.add.text(game.world.centerX - 16, 50, 'Lives left: 5\nScore: 400', customCSS);
+                scoreText.anchor.setTo(0.5,0.5);
+                startText = game.add.text(game.world.centerX - 8, game.world.centerY - 4, 'Plong, a simple twist of the classic \'Pong\' game!\nPress enter to start', customCSS);
+                startText.anchor.setTo(0.5,0.5);
+
+                // link sound effects
+                squit = game.add.audio('squit');
+                meow1 = game.add.audio('meow1');
+                numkey = game.add.audio('numkey');
+                ping = game.add.audio('ping');
+
+                // background music
+                background = game.add.audio('background');
+                background.loopFull();
+                background.volume = 0.8;
+
+                // link input with function
+                inputEnter = game.input.keyboard.addKey(Phaser.Keyboard.ENTER);
+                inputEnter.onDown.add(launchBall, this);
+                inputSpace = game.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
+                inputSpace.onDown.add(togglePause, this);
+                game.input.onDown.add(launchOrPause, this);
+
+                // calibrate game data
+                reset();
+            }
+
+            function update() {
+                // check for user focus
+                if (game.input.activePointer.withinGame) {
+                    game.input.enabled = true;
+                } else {
+                    game.input.enabled = false;
+                }
+
+                // control both paddles with pointer location
+                controlPaddle(paddleTall, game.input.y);
+                controlPaddleFlat(paddleFlat, game.input.x);
+
+                // collision actions
+                game.physics.arcade.collide(paddleTall, ball, updateVel);
+                game.physics.arcade.collide(paddleFlat,ball, updateVel);
+                game.physics.arcade.collide(paddleTall, paddleFlat);
+                if (ball.body.blocked.left || ball.body.blocked.down) {
+                    playerLives -= 1;
+                    console.log('Lives left: ', playerLives);
+                    updateLiveText();
+                    squit.play();
+                    squit.volume = 0.5;
+                } else if (ball.body.blocked.right || ball.body.blocked.up) {
+                    numkey.play();
+                    numkey.volume = 0.25;
+                }
+
+                // harder level
+                if (ballLaunched && multiplier > 4) {
+                    velocityIncrement('x', multiplier);
+                    velocityIncrement('y', multiplier);
+                    //console.log(ball.body.velocity.x, ball.body.velocity.y)
+                }
+            }
+
+            // paddle helpers
+            function createPaddle(x, y, type) {
+                var paddle = game.add.sprite(x, y, type);
+                // anchor at the center of the paddle
+                paddle.anchor.setTo(0.5, 0.5);
+                game.physics.arcade.enable(paddle);
+                paddle.body.collideWorldBounds = true;
+                paddle.body.immovable = true;
+                return paddle;
+            }
+
+            function controlPaddle(paddle, y) {
+                paddle.y = y;
+
+                if (paddle.y < paddle.height / 2) {
+                    paddle.y = paddle.height / 2;
+                } else if (paddle.y > game.world.height - paddle.height / 2) {
+                    paddle.y = game.world.height - paddle.height / 2;
+                }
+            }
+
+            function controlPaddleFlat(paddle, x) {
+                paddle.x = x;
+                if (paddle.x < paddle.width / 2) {
+                    paddle.x = paddle.width / 2;
+                } else if (paddle.x > game.world.width - paddle.width / 2) {
+                    paddle.x = game.world.width - paddle.width / 2;
+                }
+            }
+
+            // ball helpers
+            function createBall(x, y) {
+                var ball = game.add.sprite(x, y, 'ball');
+                ball.anchor.setTo(0.5, 0.5);
+                game.physics.arcade.enable(ball);
+                ball.body.collideWorldBounds = true;
+                // rebound due to collisions
+                ball.body.bounce.setTo(1,1);
+                return ball;
+            }
+
+            function launchBall() {
+                if (ballLaunched) {
+                    ball.x = game.world.centerX;
+                    ball.y = game.world.centerY;
+                    ball.body.velocity.setTo(0,0);
+                    ballLaunched = false;
+                    startText = game.add.text(game.world.centerX - 8, game.world.centerY - 4, 'Press enter to start', customCSS);
+                    startText.anchor.setTo(0.5,0.5);
+                } else {
+                    reset();
+                    startText.destroy();
+                    ball.body.velocity.x = randPosNeg(ballVelocity);
+                    ball.body.velocity.y = randPosNeg(ballVelocity);
+                    ballLaunched = true;
+                }
+            }
+
+            // helper helpers
+            function randPosNeg(value) {
+                var halfChance = game.rnd.integerInRange(0,1);
+                if (halfChance) {
+                    value *= -1;
+                }
+                return value;
+            }
+
+            function velocityIncrement(axis, value) {
+                if (axis == 'x') {
+                    ball.body.velocity.x += randPosNeg(value);
+                } else if (axis == 'y') {
+                    ball.body.velocity.y += randPosNeg(value);
+                }
+            }
+
+            // status updaters
+            function updateLiveText() {
+                scoreText.setText('Lives left: ' + playerLives + '\nScore: ' + (ballVelocity - 400));
+                if (playerLives < 1) {
+                    playerLives = 5;
+                    console.log('You lose.. Final score: ', (ballVelocity - 400));
+                    scoreText.setText('Game over.\nFinal Score: ' + (ballVelocity - 400));
+                    meow1.play();
+                    meow1.volume = 0.5;
+                    launchBall();
+                }
+            }
+
+            function updateVel() {
+                ping.play();
+                ping.volume = 0.25;
+                ballVelocity += (25 * multiplier);
+                velocityIncrement('x', 25 * multiplier);
+                velocityIncrement('y', 25 * multiplier);
+                console.log('Ball velocity: ', ballVelocity);
+                if (ballVelocity > (300 * multiplier)) {
+                    multiplier++;
+                    console.log('Multiplier increased to: x', multiplier);
+                }
+
+                updateLiveText();
+            }
+
+            function reset() {
+                ballLaunched = false;
+                ballVelocity = 400;
+                playerLives = 5;
+                multiplier = 1;
+                console.log('Lives left: ', playerLives);
+                updateLiveText();
+            }
+
+            // game flow control
+            function togglePause() {
+                if (ballLaunched) {
+                    if (game.physics.arcade.isPaused) {
+                        pauseText.destroy();
+                        game.physics.arcade.isPaused = false;
+                        console.log('unpaused');
+                    } else {
+                        pauseText = game.add.text (game.world.centerX - 100, game.world.centerY- 60, 'Game paused.', customCSS);
+                        game.physics.arcade.isPaused = true;
+                        console.log('paused');
+                    }
+                }
+            }
+            function launchOrPause() {
+                if (ballLaunched) {
+                    togglePause();
+                } else {
+                    launchBall();
+                }
+            }
+
+            
+        </script>
+    </body>
+</html>
